@@ -18,7 +18,7 @@ envVarGroups:
     - key: ES_USER
       value: elastic
     - key: DB
-      value: postgresql
+      value: postgres12
 
 services:
 - type: pserv
@@ -68,9 +68,7 @@ services:
   - fromGroup: temporal-shared
   - key: SERVICES
     value: frontend
-  - key: SKIP_POSTGRES_DB_CREATION
-    value: true
-  - key: SKIP_VISIBILITY_DB_SETUP
+  - key: SKIP_DB_CREATE
     value: true
   - key: ES_SEEDS
     fromService:

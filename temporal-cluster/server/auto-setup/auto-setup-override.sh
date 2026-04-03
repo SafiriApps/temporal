@@ -7,7 +7,21 @@ set -eux -o pipefail
 TEMPORAL_HOME="${TEMPORAL_HOME:-/etc/temporal}"
 
 DB="${DB:-cassandra}"
+DB="$(echo "${DB}" | tr '[:upper:]' '[:lower:]')"
+case "${DB}" in
+    mysql)
+        DB="mysql8"
+        ;;
+    postgresql|postgres)
+        DB="postgres12"
+        ;;
+esac
+
 SKIP_SCHEMA_SETUP="${SKIP_SCHEMA_SETUP:-false}"
+SKIP_DB_CREATE="${SKIP_DB_CREATE:-${SKIP_POSTGRES_DB_CREATION:-false}}"
+# Legacy alias retained during migration.
+SKIP_POSTGRES_DB_CREATION="${SKIP_POSTGRES_DB_CREATION:-${SKIP_DB_CREATE}}"
+SKIP_VISIBILITY_DB_SETUP="${SKIP_VISIBILITY_DB_SETUP:-false}"
 
 # Cassandra
 KEYSPACE="${KEYSPACE:-temporal}"
@@ -26,7 +40,11 @@ CASSANDRA_REPLICATION_FACTOR="${CASSANDRA_REPLICATION_FACTOR:-1}"
 # MySQL/PostgreSQL
 DBNAME="${DBNAME:-temporal}"
 VISIBILITY_DBNAME="${VISIBILITY_DBNAME:-temporal_visibility}"
-DB_PORT="${DB_PORT:-3306}"
+if [[ "${DB}" == "postgres12" || "${DB}" == "postgres12_pgx" ]]; then
+    DB_PORT="${DB_PORT:-5432}"
+else
+    DB_PORT="${DB_PORT:-3306}"
+fi
 VISIBILITY_DB_PORT="${VISIBILITY_DB_PORT:-${DB_PORT}}"
 
 MYSQL_SEEDS="${MYSQL_SEEDS:-}"
@@ -40,9 +58,11 @@ POSTGRES_PWD="${POSTGRES_PWD:-}"
 VISIBILITY_POSTGRES_SEEDS="${VISIBILITY_POSTGRES_SEEDS:-${POSTGRES_SEEDS}}"
 VISIBILITY_POSTGRES_USER="${VISIBILITY_POSTGRES_USER:-${POSTGRES_USER}}"
 VISIBILITY_POSTGRES_PWD="${VISIBILITY_POSTGRES_PWD:-${POSTGRES_PWD}}"
-POSTGRES_PLUGIN="${POSTGRES_PLUGIN:-postgres12}"
-# Don't create the DB instance
-SKIP_POSTGRES_DB_CREATION="${SKIP_POSTGRES_DB_CREATION:-false}"
+if [ "${DB}" == "postgres12_pgx" ]; then
+    POSTGRES_PLUGIN="${POSTGRES_PLUGIN:-postgres12_pgx}"
+else
+    POSTGRES_PLUGIN="${POSTGRES_PLUGIN:-postgres12}"
+fi
 
 # Elasticsearch
 ENABLE_ES="${ENABLE_ES:-false}"
@@ -56,11 +76,14 @@ ES_VIS_INDEX="${ES_VIS_INDEX:-temporal_visibility_v1_dev}"
 ES_SCHEMA_SETUP_TIMEOUT_IN_SECONDS="${ES_SCHEMA_SETUP_TIMEOUT_IN_SECONDS:-0}"
 
 # Render-specific Server setup
-TEMPORAL_CLI_ADDRESS="$RENDER_SERVICE_NAME:${FRONTEND_GRPC_PORT:-7233}"
+TEMPORAL_ADDRESS="${TEMPORAL_ADDRESS:-${RENDER_SERVICE_NAME:-temporal}:${FRONTEND_GRPC_PORT:-7233}}"
+TEMPORAL_CLI_ADDRESS="${TEMPORAL_CLI_ADDRESS:-${TEMPORAL_ADDRESS}}"
+export TEMPORAL_ADDRESS
+export TEMPORAL_CLI_ADDRESS
 
 SKIP_DEFAULT_NAMESPACE_CREATION="${SKIP_DEFAULT_NAMESPACE_CREATION:-false}"
 DEFAULT_NAMESPACE="${DEFAULT_NAMESPACE:-default}"
-DEFAULT_NAMESPACE_RETENTION=${DEFAULT_NAMESPACE_RETENTION:-1}
+DEFAULT_NAMESPACE_RETENTION=${DEFAULT_NAMESPACE_RETENTION:-24h}
 
 SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES="${SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES:-false}"
 
@@ -69,25 +92,31 @@ echo "Using repository Temporal auto-setup override."
 # === Main database functions ===
 
 validate_db_env() {
-    if [ "${DB}" == "mysql" ]; then
-        if [ -z "${MYSQL_SEEDS}" ]; then
-            echo "MYSQL_SEEDS env must be set if DB is ${DB}."
+    case "${DB}" in
+        mysql8)
+            if [ -z "${MYSQL_SEEDS}" ]; then
+                echo "MYSQL_SEEDS env must be set if DB is ${DB}."
+                exit 1
+            fi
+            ;;
+        postgres12|postgres12_pgx)
+            if [ -z "${POSTGRES_SEEDS}" ]; then
+                echo "POSTGRES_SEEDS env must be set if DB is ${DB}."
+                exit 1
+            fi
+            ;;
+        cassandra)
+            if [ -z "${CASSANDRA_SEEDS}" ]; then
+                echo "CASSANDRA_SEEDS env must be set if DB is ${DB}."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "Unsupported DB type: ${DB}."
+            echo "Supported DB values: cassandra, mysql8, postgres12, postgres12_pgx"
             exit 1
-        fi
-    elif [ "${DB}" == "postgresql" ]; then
-        if [ -z "${POSTGRES_SEEDS}" ]; then
-            echo "POSTGRES_SEEDS env must be set if DB is ${DB}."
-            exit 1
-        fi
-    elif [ "${DB}" == "cassandra" ]; then
-        if [ -z "${CASSANDRA_SEEDS}" ]; then
-            echo "CASSANDRA_SEEDS env must be set if DB is ${DB}."
-            exit 1
-        fi
-    else
-        echo "Unsupported DB type: ${DB}."
-        exit 1
-    fi
+            ;;
+    esac
 }
 
 wait_for_cassandra() {
@@ -127,16 +156,21 @@ wait_for_postgres() {
 }
 
 wait_for_db() {
-    if [ "${DB}" == "mysql" ]; then
-        wait_for_mysql
-    elif [ "${DB}" == "postgresql" ]; then
-        wait_for_postgres
-    elif [ "${DB}" == "cassandra" ]; then
-        wait_for_cassandra
-    else
-        echo "Unsupported DB type: ${DB}."
-        exit 1
-    fi
+    case "${DB}" in
+        mysql8)
+            wait_for_mysql
+            ;;
+        postgres12|postgres12_pgx)
+            wait_for_postgres
+            ;;
+        cassandra)
+            wait_for_cassandra
+            ;;
+        *)
+            echo "Unsupported DB type: ${DB}."
+            exit 1
+            ;;
+    esac
 }
 
 resolve_postgres_schema_dir() {
@@ -220,14 +254,22 @@ setup_mysql_schema() {
         MYSQL_CONNECT_ATTR=()
     fi
 
-    SCHEMA_DIR=${TEMPORAL_HOME}/schema/mysql/v57/temporal/versioned
-    temporal-sql-tool --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" "${MYSQL_CONNECT_ATTR[@]}" create --db "${DBNAME}"
-    temporal-sql-tool --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" "${MYSQL_CONNECT_ATTR[@]}" --db "${DBNAME}" setup-schema -v 0.0
-    temporal-sql-tool --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" "${MYSQL_CONNECT_ATTR[@]}" --db "${DBNAME}" update-schema -d "${SCHEMA_DIR}"
-    VISIBILITY_SCHEMA_DIR=${TEMPORAL_HOME}/schema/mysql/v57/visibility/versioned
-    temporal-sql-tool --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" "${MYSQL_CONNECT_ATTR[@]}" create --db "${VISIBILITY_DBNAME}"
-    temporal-sql-tool --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" "${MYSQL_CONNECT_ATTR[@]}" --db "${VISIBILITY_DBNAME}" setup-schema -v 0.0
-    temporal-sql-tool --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" "${MYSQL_CONNECT_ATTR[@]}" --db "${VISIBILITY_DBNAME}" update-schema -d "${VISIBILITY_SCHEMA_DIR}"
+    MYSQL_VERSION_DIR=v8
+    SCHEMA_DIR=${TEMPORAL_HOME}/schema/mysql/${MYSQL_VERSION_DIR}/temporal/versioned
+    if [[ "${SKIP_DB_CREATE}" != true ]]; then
+        temporal-sql-tool --plugin "${DB}" --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" -p "${DB_PORT}" "${MYSQL_CONNECT_ATTR[@]}" --db "${DBNAME}" create
+    fi
+    temporal-sql-tool --plugin "${DB}" --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" -p "${DB_PORT}" "${MYSQL_CONNECT_ATTR[@]}" --db "${DBNAME}" setup-schema -v 0.0
+    temporal-sql-tool --plugin "${DB}" --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" -p "${DB_PORT}" "${MYSQL_CONNECT_ATTR[@]}" --db "${DBNAME}" update-schema -d "${SCHEMA_DIR}"
+
+    if [[ "${ENABLE_ES}" != true && "${SKIP_VISIBILITY_DB_SETUP}" != true ]]; then
+        VISIBILITY_SCHEMA_DIR=${TEMPORAL_HOME}/schema/mysql/${MYSQL_VERSION_DIR}/visibility/versioned
+        if [[ "${SKIP_DB_CREATE}" != true ]]; then
+            temporal-sql-tool --plugin "${DB}" --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" -p "${VISIBILITY_DB_PORT}" "${MYSQL_CONNECT_ATTR[@]}" --db "${VISIBILITY_DBNAME}" create
+        fi
+        temporal-sql-tool --plugin "${DB}" --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" -p "${VISIBILITY_DB_PORT}" "${MYSQL_CONNECT_ATTR[@]}" --db "${VISIBILITY_DBNAME}" setup-schema -v 0.0
+        temporal-sql-tool --plugin "${DB}" --ep "${MYSQL_SEEDS}" -u "${MYSQL_USER}" -p "${VISIBILITY_DB_PORT}" "${MYSQL_CONNECT_ATTR[@]}" --db "${VISIBILITY_DBNAME}" update-schema -d "${VISIBILITY_SCHEMA_DIR}"
+    fi
 }
 
 setup_postgres_schema() {
@@ -237,17 +279,17 @@ setup_postgres_schema() {
     SCHEMA_DIR=$(resolve_postgres_schema_dir temporal)
     echo "Using PostgreSQL schema dir: ${SCHEMA_DIR}"
     # Create database only if its name is different from the user name. Otherwise PostgreSQL container itself will create database.
-    if [[ "${DBNAME}" != "${POSTGRES_USER}" && "${SKIP_POSTGRES_DB_CREATION}" != true ]]; then
+    if [[ "${DBNAME}" != "${POSTGRES_USER}" && "${SKIP_DB_CREATE}" != true ]]; then
         temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" create --db "${DBNAME}"
     fi
     temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" --db "${DBNAME}" setup-schema -v 0.0
     temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" --db "${DBNAME}" update-schema -d "${SCHEMA_DIR}"
 
-    if [[ "${SKIP_VISIBILITY_DB_SETUP}" != true ]]; then
+    if [[ "${ENABLE_ES}" != true && "${SKIP_VISIBILITY_DB_SETUP}" != true ]]; then
         { export SQL_PASSWORD=${VISIBILITY_POSTGRES_PWD}; } 2> /dev/null
         VISIBILITY_SCHEMA_DIR=$(resolve_postgres_schema_dir visibility)
         echo "Using PostgreSQL visibility schema dir: ${VISIBILITY_SCHEMA_DIR}"
-        if [[ "${VISIBILITY_DBNAME}" != "${POSTGRES_USER}" && "${SKIP_POSTGRES_DB_CREATION}" != true ]]; then
+        if [[ "${VISIBILITY_DBNAME}" != "${VISIBILITY_POSTGRES_USER}" && "${SKIP_DB_CREATE}" != true ]]; then
             temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" create --db "${VISIBILITY_DBNAME}"
         fi
         temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" --db "${VISIBILITY_DBNAME}" setup-schema -v 0.0
@@ -256,16 +298,24 @@ setup_postgres_schema() {
 }
 
 setup_schema() {
-    if [ "${DB}" == "mysql" ]; then
-        echo 'Setup MySQL schema.'
-        setup_mysql_schema
-    elif [ "${DB}" == "postgresql" ]; then
-        echo 'Setup PostgreSQL schema.'
-        setup_postgres_schema
-    else
-        echo 'Setup Cassandra schema.'
-        setup_cassandra_schema
-    fi
+    case "${DB}" in
+        mysql8)
+            echo 'Setup MySQL schema.'
+            setup_mysql_schema
+            ;;
+        postgres12|postgres12_pgx)
+            echo 'Setup PostgreSQL schema.'
+            setup_postgres_schema
+            ;;
+        cassandra)
+            echo 'Setup Cassandra schema.'
+            setup_cassandra_schema
+            ;;
+        *)
+            echo "Unsupported DB type: ${DB}."
+            exit 1
+            ;;
+    esac
 }
 
 # === Elasticsearch functions ===
@@ -326,9 +376,9 @@ setup_es_index() {
 
 register_default_namespace() {
     echo "Registering default namespace: ${DEFAULT_NAMESPACE}."
-    if ! tctl --ns "${DEFAULT_NAMESPACE}" namespace describe; then
+    if ! temporal operator namespace describe --namespace "${DEFAULT_NAMESPACE}" > /dev/null 2>&1; then
         echo "Default namespace ${DEFAULT_NAMESPACE} not found. Creating..."
-        tctl --ns "${DEFAULT_NAMESPACE}" namespace register --rd "${DEFAULT_NAMESPACE_RETENTION}" --desc "Default namespace for Temporal Server."
+        temporal operator namespace create --retention "${DEFAULT_NAMESPACE_RETENTION}" --description "Default namespace for Temporal Server." --namespace "${DEFAULT_NAMESPACE}"
         echo "Default namespace ${DEFAULT_NAMESPACE} registration complete."
     else
         echo "Default namespace ${DEFAULT_NAMESPACE} already registered."
@@ -336,10 +386,16 @@ register_default_namespace() {
 }
 
 add_custom_search_attributes() {
+      until temporal operator search-attribute list --namespace "${DEFAULT_NAMESPACE}" > /dev/null 2>&1; do
+          echo "Waiting for namespace cache to refresh..."
+          sleep 1
+      done
+      echo "Namespace cache refreshed."
+
       echo "Adding Custom*Field search attributes."
       # TODO: Remove CustomStringField
 # @@@SNIPSTART add-custom-search-attributes-for-testing-command
-      tctl --auto_confirm admin cluster add-search-attributes \
+      temporal operator search-attribute create --namespace "${DEFAULT_NAMESPACE}" \
           --name CustomKeywordField --type Keyword \
           --name CustomStringField --type Text \
           --name CustomTextField --type Text \
@@ -351,9 +407,9 @@ add_custom_search_attributes() {
 }
 
 setup_server(){
-    echo "Temporal CLI address: ${TEMPORAL_CLI_ADDRESS}."
+    echo "Temporal address: ${TEMPORAL_ADDRESS}."
 
-    until tctl cluster health | grep SERVING; do
+    until temporal operator cluster health | grep -q SERVING; do
         echo "Waiting for Temporal server to start..."
         sleep 1
     done

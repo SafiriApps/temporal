@@ -56,10 +56,14 @@ persistence:
                     enableHostVerification: {{ default .Env.CASSANDRA_HOST_VERIFICATION "false" }}
                     serverName: {{ default .Env.CASSANDRA_HOST_NAME "" }}
         {{- end }}
-        {{- else if eq $db "mysql" }}
+        {{- else if or (eq $db "mysql") (eq $db "mysql8") }}
+        {{- $mysql_plugin := $db }}
+        {{- if eq $mysql_plugin "mysql" }}
+        {{- $mysql_plugin = "mysql8" }}
+        {{- end }}
         default:
             sql:
-                pluginName: "mysql"
+                pluginName: "{{ default .Env.MYSQL_PLUGIN $mysql_plugin }}"
                 databaseName: "{{ default .Env.DBNAME "temporal" }}"
                 connectAddr: "{{ default .Env.MYSQL_SEEDS "" }}:{{ default .Env.DB_PORT "3306" }}"
                 connectProtocol: "tcp"
@@ -74,7 +78,7 @@ persistence:
                 maxConnLifetime: {{ default .Env.SQL_MAX_CONN_TIME "1h" }}
                 tls:
                     enabled: {{ default .Env.SQL_TLS_ENABLED "false" }}
-                    сaFile: {{ default .Env.SQL_CA "" }}
+                    caFile: {{ default .Env.SQL_CA "" }}
                     certFile: {{ default .Env.SQL_CERT "" }}
                     keyFile: {{ default .Env.SQL_CERT_KEY "" }}
                     enableHostVerification: {{ default .Env.SQL_HOST_VERIFICATION "false" }}
@@ -90,7 +94,7 @@ persistence:
                 {{ $visibility_user := default .Env.VISIBILITY_MYSQL_USER $visibility_user_default }}
                 {{ $visibility_pwd_default := default .Env.MYSQL_PWD "" }}
                 {{ $visibility_pwd := default .Env.VISIBILITY_MYSQL_PWD $visibility_pwd_default }}
-                pluginName: "mysql"
+                pluginName: "{{ default .Env.MYSQL_PLUGIN $mysql_plugin }}"
                 databaseName: "{{ default .Env.VISIBILITY_DBNAME "temporal_visibility" }}"
                 connectAddr: "{{ $visibility_seeds }}:{{ $visibility_port }}"
                 connectProtocol: "tcp"
@@ -105,16 +109,20 @@ persistence:
                 maxConnLifetime: {{ default .Env.SQL_VIS_MAX_CONN_TIME "1h" }}
                 tls:
                     enabled: {{ default .Env.SQL_TLS_ENABLED "false" }}
-                    сaFile: {{ default .Env.SQL_CA "" }}
+                    caFile: {{ default .Env.SQL_CA "" }}
                     certFile: {{ default .Env.SQL_CERT "" }}
                     keyFile: {{ default .Env.SQL_CERT_KEY "" }}
                     enableHostVerification: {{ default .Env.SQL_HOST_VERIFICATION "false" }}
                     serverName: {{ default .Env.SQL_HOST_NAME "" }}
         {{- end }}
-        {{- else if eq $db "postgresql" }}
+        {{- else if or (eq $db "postgresql") (eq $db "postgres") (eq $db "postgres12") (eq $db "postgres12_pgx") }}
+        {{- $postgres_plugin := $db }}
+        {{- if or (eq $postgres_plugin "postgresql") (eq $postgres_plugin "postgres") }}
+        {{- $postgres_plugin = "postgres12" }}
+        {{- end }}
         default:
             sql:
-                pluginName: "{{ default .Env.POSTGRES_PLUGIN "postgres12" }}"
+                pluginName: "{{ default .Env.POSTGRES_PLUGIN $postgres_plugin }}"
                 databaseName: "{{ default .Env.DBNAME "temporal" }}"
                 connectAddr: "{{ default .Env.POSTGRES_SEEDS "" }}:{{ default .Env.DB_PORT "5432" }}"
                 connectProtocol: "tcp"
@@ -125,7 +133,7 @@ persistence:
                 maxConnLifetime: {{ default .Env.SQL_MAX_CONN_TIME "1h" }}
                 tls:
                     enabled: {{ default .Env.SQL_TLS_ENABLED "false" }}
-                    сaFile: {{ default .Env.SQL_CA "" }}
+                    caFile: {{ default .Env.SQL_CA "" }}
                     certFile: {{ default .Env.SQL_CERT "" }}
                     keyFile: {{ default .Env.SQL_CERT_KEY "" }}
                     enableHostVerification: {{ default .Env.SQL_HOST_VERIFICATION "false" }}
@@ -143,7 +151,7 @@ persistence:
                 {{ $visibility_user := default .Env.VISIBILITY_POSTGRES_USER $visibility_user_default }}
                 {{ $visibility_pwd_default := default .Env.POSTGRES_PWD "" }}
                 {{ $visibility_pwd := default .Env.VISIBILITY_POSTGRES_PWD $visibility_pwd_default }}
-                pluginName: "{{ default .Env.POSTGRES_PLUGIN "postgres12" }}"
+                pluginName: "{{ default .Env.POSTGRES_PLUGIN $postgres_plugin }}"
                 databaseName: "{{ $visibility_dbname }}"
                 connectAddr: "{{ $visibility_seeds }}:{{ $visibility_port }}"
                 connectProtocol: "tcp"
@@ -154,7 +162,7 @@ persistence:
                 maxConnLifetime: {{ default .Env.SQL_VIS_MAX_CONN_TIME "1h" }}
                 tls:
                     enabled: {{ default .Env.SQL_TLS_ENABLED "false" }}
-                    сaFile: {{ default .Env.SQL_CA "" }}
+                    caFile: {{ default .Env.SQL_CA "" }}
                     certFile: {{ default .Env.SQL_CERT "" }}
                     keyFile: {{ default .Env.SQL_CERT_KEY "" }}
                     enableHostVerification: {{ default .Env.SQL_HOST_VERIFICATION "false" }}
