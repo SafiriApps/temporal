@@ -106,6 +106,22 @@ services:
     fromDatabase:
       name: temporal-db
       property: host
+  - key: VISIBILITY_DB_PORT
+    fromDatabase:
+      name: temporal-db
+      property: port
+  - key: VISIBILITY_POSTGRES_USER
+    fromDatabase:
+      name: temporal-db
+      property: user
+  - key: VISIBILITY_POSTGRES_PWD
+    fromDatabase:
+      name: temporal-db
+      property: password
+  - key: VISIBILITY_POSTGRES_SEEDS
+    fromDatabase:
+      name: temporal-db
+      property: host
 
 - type: pserv
   name: temporal-history
@@ -142,6 +158,14 @@ services:
     fromDatabase:
       name: temporal-db
       property: database
+  - key: VISIBILITY_DBNAME
+    fromDatabase:
+      name: temporal-db
+      property: database
+  - key: DB_PORT
+    fromDatabase:
+      name: temporal-db
+      property: port
   - key: POSTGRES_USER
     fromDatabase:
       name: temporal-db
@@ -151,6 +175,22 @@ services:
       name: temporal-db
       property: password
   - key: POSTGRES_SEEDS
+    fromDatabase:
+      name: temporal-db
+      property: host
+  - key: VISIBILITY_DB_PORT
+    fromDatabase:
+      name: temporal-db
+      property: port
+  - key: VISIBILITY_POSTGRES_USER
+    fromDatabase:
+      name: temporal-db
+      property: user
+  - key: VISIBILITY_POSTGRES_PWD
+    fromDatabase:
+      name: temporal-db
+      property: password
+  - key: VISIBILITY_POSTGRES_SEEDS
     fromDatabase:
       name: temporal-db
       property: host
@@ -190,6 +230,14 @@ services:
     fromDatabase:
       name: temporal-db
       property: database
+  - key: VISIBILITY_DBNAME
+    fromDatabase:
+      name: temporal-db
+      property: database
+  - key: DB_PORT
+    fromDatabase:
+      name: temporal-db
+      property: port
   - key: POSTGRES_USER
     fromDatabase:
       name: temporal-db
@@ -199,6 +247,22 @@ services:
       name: temporal-db
       property: password
   - key: POSTGRES_SEEDS
+    fromDatabase:
+      name: temporal-db
+      property: host
+  - key: VISIBILITY_DB_PORT
+    fromDatabase:
+      name: temporal-db
+      property: port
+  - key: VISIBILITY_POSTGRES_USER
+    fromDatabase:
+      name: temporal-db
+      property: user
+  - key: VISIBILITY_POSTGRES_PWD
+    fromDatabase:
+      name: temporal-db
+      property: password
+  - key: VISIBILITY_POSTGRES_SEEDS
     fromDatabase:
       name: temporal-db
       property: host
@@ -243,6 +307,14 @@ services:
     fromDatabase:
       name: temporal-db
       property: database
+  - key: VISIBILITY_DBNAME
+    fromDatabase:
+      name: temporal-db
+      property: database
+  - key: DB_PORT
+    fromDatabase:
+      name: temporal-db
+      property: port
   - key: POSTGRES_USER
     fromDatabase:
       name: temporal-db
@@ -252,6 +324,22 @@ services:
       name: temporal-db
       property: password
   - key: POSTGRES_SEEDS
+    fromDatabase:
+      name: temporal-db
+      property: host
+  - key: VISIBILITY_DB_PORT
+    fromDatabase:
+      name: temporal-db
+      property: port
+  - key: VISIBILITY_POSTGRES_USER
+    fromDatabase:
+      name: temporal-db
+      property: user
+  - key: VISIBILITY_POSTGRES_PWD
+    fromDatabase:
+      name: temporal-db
+      property: password
+  - key: VISIBILITY_POSTGRES_SEEDS
     fromDatabase:
       name: temporal-db
       property: host
