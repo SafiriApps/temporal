@@ -4,7 +4,7 @@ databases:
   user: temporal
   plan: basic-256mb
   diskSizeGB: 1
-  region: oregon
+  region: frankfurt
 
 envVarGroups:
   - name: temporal-shared
@@ -24,19 +24,19 @@ services:
 - type: pserv
   name: temporal-elasticsearch
   autoDeploy: false
-  plan: Starter
-  region: oregon
+  plan: Standard
+  region: frankfurt
   env: docker
   dockerfilePath: ./temporal-cluster/elasticsearch/Dockerfile
   disk:
     name: esdata
     mountPath: /usr/share/elasticsearch/data
-    sizeGB: 10
+    sizeGB: 20
   envVars:
   - key: PORT
     value: 9200
   - key: ES_JAVA_OPTS
-    value: "-Xms100m -Xmx100m"
+    value: "-Xms1g -Xmx1g"
   - key: xpack.security.enabled
     value: true
   - key: ELASTIC_PASSWORD
@@ -51,11 +51,12 @@ services:
     value: 128mb
   - key: discovery.type
     value: single-node
+
 - type: pserv
   name: temporal-frontend
   autoDeploy: false
   plan: Starter
-  region: oregon
+  region: frankfurt
   env: docker
   dockerfilePath: ./temporal-cluster/server/auto-setup/Dockerfile
   scaling:
@@ -101,11 +102,12 @@ services:
     fromDatabase:
       name: temporal-db
       property: host
+
 - type: pserv
   name: temporal-history
   autoDeploy: false
   plan: Starter
-  region: oregon
+  region: frankfurt
   env: docker
   dockerfilePath: ./temporal-cluster/server/Dockerfile
   scaling:
@@ -148,11 +150,12 @@ services:
     fromDatabase:
       name: temporal-db
       property: host
+
 - type: pserv
   name: temporal-matching
   autoDeploy: false
   plan: Starter
-  region: oregon
+  region: frankfurt
   env: docker
   dockerfilePath: ./temporal-cluster/server/Dockerfile
   scaling:
@@ -195,11 +198,12 @@ services:
     fromDatabase:
       name: temporal-db
       property: host
+
 - type: pserv
-  autoDeploy: false
   name: temporal-worker
+  autoDeploy: false
   plan: Starter
-  region: oregon
+  region: frankfurt
   env: docker
   dockerfilePath: ./temporal-cluster/server/Dockerfile
   scaling:
@@ -209,8 +213,6 @@ services:
     targetCPUPercent: 80
   envVars:
   - fromGroup: temporal-shared
-  # The worker service needs to wait for the history service to be up first,
-  # otherwise it will fail with "error starting scanner".
   - key: DEPENDS_ON_HISTORY
     fromService:
       name: temporal-history
@@ -249,11 +251,12 @@ services:
     fromDatabase:
       name: temporal-db
       property: host
+
 - type: pserv
   name: temporal-ui
   autoDeploy: false
   plan: Starter
-  region: oregon
+  region: frankfurt
   env: docker
   dockerfilePath: ./temporal-cluster/web/Dockerfile
   envVars:
@@ -266,6 +269,7 @@ services:
       name: temporal-frontend
       type: pserv
       property: host
+
 # For secure external access to the Temporal Workflow Service via REST
 # See https://github.com/render-examples/temporal-rest-proxy
 # - type: web
@@ -273,7 +277,7 @@ services:
 #   repo: https://github.com/render-examples/temporal-rest-proxy
 #   autoDeploy: false
 #   plan: Starter
-#   region: oregon
+#   region: frankfurt
 #   env: go
 #   buildCommand: go build rest-proxy/main.go
 #   startCommand: ./main
@@ -285,11 +289,12 @@ services:
 #       property: host
 #   - key: AUTH_TOKEN
 #     sync: false
+
 - type: web
   repo: https://github.com/render-examples/sample-temporal-app
   name: app-workflow-trigger
   plan: Starter
-  region: oregon
+  region: frankfurt
   env: go
   buildCommand: go build start/main.go
   startCommand: ./main
@@ -300,11 +305,12 @@ services:
       name: temporal-frontend
       type: pserv
       property: host
+
 - type: worker
   repo: https://github.com/render-examples/sample-temporal-app
   name: app-worker
   plan: Starter
-  region: oregon
+  region: frankfurt
   env: go
   buildCommand: go build worker/main.go
   startCommand: ./main
