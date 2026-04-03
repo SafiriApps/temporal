@@ -176,7 +176,7 @@ setup_postgres_schema() {
     # TODO (alex): Remove exports
     { export SQL_PASSWORD=${POSTGRES_PWD}; } 2> /dev/null
 
-    SCHEMA_DIR=${TEMPORAL_HOME}/schema/postgresql/v96/temporal/versioned
+    SCHEMA_DIR=${TEMPORAL_HOME}/schema/postgresql/v12/temporal/versioned
     # Create database only if its name is different from the user name. Otherwise PostgreSQL container itself will create database.
     if [[ "${DBNAME}" != "${POSTGRES_USER}" && "${SKIP_POSTGRES_DB_CREATION}" != true ]]; then
         temporal-sql-tool --plugin postgres12 --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" create --db "${DBNAME}"
@@ -186,7 +186,7 @@ setup_postgres_schema() {
 
     if [[ "${SKIP_VISIBILITY_DB_SETUP}" != true ]]; then
         { export SQL_PASSWORD=${VISIBILITY_POSTGRES_PWD}; } 2> /dev/null
-        VISIBILITY_SCHEMA_DIR=${TEMPORAL_HOME}/schema/postgresql/v96/visibility/versioned
+        VISIBILITY_SCHEMA_DIR=${TEMPORAL_HOME}/schema/postgresql/v12/visibility/versioned
         if [[ "${VISIBILITY_DBNAME}" != "${POSTGRES_USER}" && "${SKIP_POSTGRES_DB_CREATION}" != true ]]; then
             temporal-sql-tool --plugin postgres12 --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" create --db "${VISIBILITY_DBNAME}"
         fi
