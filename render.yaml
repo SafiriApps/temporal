@@ -71,7 +71,7 @@ services:
   - key: SKIP_POSTGRES_DB_CREATION
     value: true
   - key: SKIP_VISIBILITY_DB_SETUP
-    value: true
+    value: false
   - key: ES_SEEDS
     fromService:
       name: temporal-elasticsearch
@@ -83,6 +83,10 @@ services:
       type: pserv
       envVarKey: ELASTIC_PASSWORD
   - key: DBNAME
+    fromDatabase:
+      name: temporal-db
+      property: database
+  - key: VISIBILITY_DBNAME
     fromDatabase:
       name: temporal-db
       property: database

@@ -27,6 +27,7 @@ CASSANDRA_REPLICATION_FACTOR="${CASSANDRA_REPLICATION_FACTOR:-1}"
 DBNAME="${DBNAME:-temporal}"
 VISIBILITY_DBNAME="${VISIBILITY_DBNAME:-temporal_visibility}"
 DB_PORT="${DB_PORT:-3306}"
+VISIBILITY_DB_PORT="${VISIBILITY_DB_PORT:-${DB_PORT}}"
 
 MYSQL_SEEDS="${MYSQL_SEEDS:-}"
 MYSQL_USER="${MYSQL_USER:-}"
@@ -36,6 +37,9 @@ MYSQL_TX_ISOLATION_COMPAT="${MYSQL_TX_ISOLATION_COMPAT:-false}"
 POSTGRES_SEEDS="${POSTGRES_SEEDS:-}"
 POSTGRES_USER="${POSTGRES_USER:-}"
 POSTGRES_PWD="${POSTGRES_PWD:-}"
+VISIBILITY_POSTGRES_SEEDS="${VISIBILITY_POSTGRES_SEEDS:-${POSTGRES_SEEDS}}"
+VISIBILITY_POSTGRES_USER="${VISIBILITY_POSTGRES_USER:-${POSTGRES_USER}}"
+VISIBILITY_POSTGRES_PWD="${VISIBILITY_POSTGRES_PWD:-${POSTGRES_PWD}}"
 POSTGRES_PLUGIN="${POSTGRES_PLUGIN:-postgres12}"
 # Don't create the DB instance
 SKIP_POSTGRES_DB_CREATION="${SKIP_POSTGRES_DB_CREATION:-false}"
@@ -306,7 +310,15 @@ setup_es_index() {
     INDEX_URL="${ES_SERVER}/${ES_VIS_INDEX}"
     curl --fail --user "${ES_USER}":"${ES_PWD}" -X PUT "${SETTINGS_URL}" -H "Content-Type: application/json" --data-binary "@${SETTINGS_FILE}" --write-out "\n"
     curl --fail --user "${ES_USER}":"${ES_PWD}" -X PUT "${TEMPLATE_URL}" -H 'Content-Type: application/json' --data-binary "@${SCHEMA_FILE}" --write-out "\n"
-    curl --user "${ES_USER}":"${ES_PWD}" -X PUT "${INDEX_URL}" --write-out "\n"
+    INDEX_STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" --user "${ES_USER}":"${ES_PWD}" "${INDEX_URL}")
+    if [ "${INDEX_STATUS}" == "200" ]; then
+        echo "Elasticsearch visibility index ${ES_VIS_INDEX} already exists."
+    elif [ "${INDEX_STATUS}" == "404" ]; then
+        curl --fail --user "${ES_USER}":"${ES_PWD}" -X PUT "${INDEX_URL}" --write-out "\n"
+    else
+        echo "Unexpected Elasticsearch response while checking visibility index ${ES_VIS_INDEX}: ${INDEX_STATUS}" >&2
+        return 1
+    fi
 # @@@SNIPEND
 }
 
