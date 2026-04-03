@@ -6,9 +6,9 @@ persistence:
     numHistoryShards: {{ default .Env.NUM_HISTORY_SHARDS "4" }}
     defaultStore: default
     visibilityStore: visibility
-    {{- $es := default .Env.ENABLE_ES "false" | lower -}}
+    {{ $es := default .Env.ENABLE_ES "false" | lower }}
     datastores:
-        {{- $db := default .Env.DB "cassandra" | lower -}}
+        {{ $db := default .Env.DB "cassandra" | lower }}
         {{- if eq $db "cassandra" }}
         default:
             cassandra:
@@ -279,7 +279,7 @@ global:
         authorizer: {{ default .Env.TEMPORAL_AUTH_AUTHORIZER "" }}
         claimMapper: {{ default .Env.TEMPORAL_AUTH_CLAIM_MAPPER "" }}
 
-{{- $temporalGrpcPort := default .Env.FRONTEND_GRPC_PORT "7233" }}
+{{ $temporalGrpcPort := default .Env.FRONTEND_GRPC_PORT "7233" }}
 services:
     frontend:
         rpc:
@@ -346,8 +346,8 @@ namespaceDefaults:
       state: "disabled"
       URI: "file:///tmp/temporal_vis_archival/development"
 
-{{ $publicIp := default .Env.BIND_ON_IP "127.0.0.1" -}}
-{{- $defaultPublicHostPost := (print $publicIp ":" $temporalGrpcPort) -}}
+{{ $publicIp := default .Env.BIND_ON_IP "127.0.0.1" }}
+{{ $defaultPublicHostPost := (print $publicIp ":" $temporalGrpcPort) }}
 publicClient:
     hostPort: "{{ default .Env.PUBLIC_FRONTEND_ADDRESS $defaultPublicHostPost }}"
 
