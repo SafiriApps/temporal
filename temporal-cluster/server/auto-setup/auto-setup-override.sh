@@ -4,6 +4,8 @@ set -eux -o pipefail
 
 # === Auto setup defaults ===
 
+TEMPORAL_HOME="${TEMPORAL_HOME:-/etc/temporal}"
+
 DB="${DB:-cassandra}"
 SKIP_SCHEMA_SETUP="${SKIP_SCHEMA_SETUP:-false}"
 
@@ -34,6 +36,7 @@ MYSQL_TX_ISOLATION_COMPAT="${MYSQL_TX_ISOLATION_COMPAT:-false}"
 POSTGRES_SEEDS="${POSTGRES_SEEDS:-}"
 POSTGRES_USER="${POSTGRES_USER:-}"
 POSTGRES_PWD="${POSTGRES_PWD:-}"
+POSTGRES_PLUGIN="${POSTGRES_PLUGIN:-postgres12}"
 # Don't create the DB instance
 SKIP_POSTGRES_DB_CREATION="${SKIP_POSTGRES_DB_CREATION:-false}"
 
@@ -56,6 +59,8 @@ DEFAULT_NAMESPACE="${DEFAULT_NAMESPACE:-default}"
 DEFAULT_NAMESPACE_RETENTION=${DEFAULT_NAMESPACE_RETENTION:-1}
 
 SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES="${SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES:-false}"
+
+echo "Using repository Temporal auto-setup override."
 
 # === Main database functions ===
 
@@ -130,6 +135,55 @@ wait_for_db() {
     fi
 }
 
+resolve_postgres_schema_dir() {
+    local schema_name="$1"
+    local override=""
+    local base_dir="${TEMPORAL_HOME}/schema/postgresql"
+    local matches=()
+
+    if [ "${schema_name}" == "temporal" ]; then
+        override="${TEMPORAL_POSTGRES_SCHEMA_DIR:-}"
+    else
+        override="${TEMPORAL_VISIBILITY_POSTGRES_SCHEMA_DIR:-}"
+    fi
+
+    if [ -n "${override}" ]; then
+        if [ -d "${override}" ]; then
+            echo "${override}"
+            return 0
+        fi
+
+        echo "Configured PostgreSQL schema dir does not exist: ${override}" >&2
+        return 1
+    fi
+
+    if [ -d "${base_dir}/v12/${schema_name}/versioned" ]; then
+        echo "${base_dir}/v12/${schema_name}/versioned"
+        return 0
+    fi
+
+    if [ -d "${base_dir}/v96/${schema_name}/versioned" ]; then
+        echo "${base_dir}/v96/${schema_name}/versioned"
+        return 0
+    fi
+
+    if [ ! -d "${base_dir}" ]; then
+        echo "PostgreSQL schema base dir does not exist: ${base_dir}" >&2
+        return 1
+    fi
+
+    shopt -s nullglob
+    matches=( "${base_dir}"/v*/"${schema_name}"/versioned )
+    shopt -u nullglob
+
+    if [ "${#matches[@]}" -eq 0 ]; then
+        echo "No PostgreSQL schema directories found under ${base_dir} for ${schema_name}" >&2
+        return 1
+    fi
+
+    echo "${matches[0]}"
+}
+
 setup_cassandra_schema() {
     # TODO (alex): Remove exports
     export CASSANDRA_USER=${CASSANDRA_USER}
@@ -176,22 +230,24 @@ setup_postgres_schema() {
     # TODO (alex): Remove exports
     { export SQL_PASSWORD=${POSTGRES_PWD}; } 2> /dev/null
 
-    SCHEMA_DIR=${TEMPORAL_HOME}/schema/postgresql/v12/temporal/versioned
+    SCHEMA_DIR=$(resolve_postgres_schema_dir temporal)
+    echo "Using PostgreSQL schema dir: ${SCHEMA_DIR}"
     # Create database only if its name is different from the user name. Otherwise PostgreSQL container itself will create database.
     if [[ "${DBNAME}" != "${POSTGRES_USER}" && "${SKIP_POSTGRES_DB_CREATION}" != true ]]; then
-        temporal-sql-tool --plugin postgres12 --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" create --db "${DBNAME}"
+        temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" create --db "${DBNAME}"
     fi
-    temporal-sql-tool --plugin postgres12 --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" --db "${DBNAME}" setup-schema -v 0.0
-    temporal-sql-tool --plugin postgres12 --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" --db "${DBNAME}" update-schema -d "${SCHEMA_DIR}"
+    temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" --db "${DBNAME}" setup-schema -v 0.0
+    temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${POSTGRES_SEEDS}" -u "${POSTGRES_USER}" -p "${DB_PORT}" --db "${DBNAME}" update-schema -d "${SCHEMA_DIR}"
 
     if [[ "${SKIP_VISIBILITY_DB_SETUP}" != true ]]; then
         { export SQL_PASSWORD=${VISIBILITY_POSTGRES_PWD}; } 2> /dev/null
-        VISIBILITY_SCHEMA_DIR=${TEMPORAL_HOME}/schema/postgresql/v12/visibility/versioned
+        VISIBILITY_SCHEMA_DIR=$(resolve_postgres_schema_dir visibility)
+        echo "Using PostgreSQL visibility schema dir: ${VISIBILITY_SCHEMA_DIR}"
         if [[ "${VISIBILITY_DBNAME}" != "${POSTGRES_USER}" && "${SKIP_POSTGRES_DB_CREATION}" != true ]]; then
-            temporal-sql-tool --plugin postgres12 --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" create --db "${VISIBILITY_DBNAME}"
+            temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" create --db "${VISIBILITY_DBNAME}"
         fi
-        temporal-sql-tool --plugin postgres12 --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" --db "${VISIBILITY_DBNAME}" setup-schema -v 0.0
-        temporal-sql-tool --plugin postgres12 --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" --db "${VISIBILITY_DBNAME}" update-schema -d "${VISIBILITY_SCHEMA_DIR}"
+        temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" --db "${VISIBILITY_DBNAME}" setup-schema -v 0.0
+        temporal-sql-tool --plugin "${POSTGRES_PLUGIN}" --ep "${VISIBILITY_POSTGRES_SEEDS}" -u "${VISIBILITY_POSTGRES_USER}" -p "${VISIBILITY_DB_PORT}" --db "${VISIBILITY_DBNAME}" update-schema -d "${VISIBILITY_SCHEMA_DIR}"
     fi
 }
 
