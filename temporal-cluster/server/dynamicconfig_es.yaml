@@ -22,9 +22,3 @@ history.defaultworkflowretrypolicy:
     MaximumIntervalCoefficient: 100.0
     BackoffCoefficient: 2.0
     MaximumAttempts: 0
-system.advancedvisibilitywritingmode:
-  - value: "on"
-    constraints: {}
-system.enablereadvisibilityfromes:
-  - value: true
-    constraints: {}

@@ -1,3 +1,3 @@
-FROM temporalio/web:1.13.0
+FROM temporalio/ui:2.43.3
 
-ENTRYPOINT ["/bin/sh", "-c", "TEMPORAL_GRPC_ENDPOINT=$TEMPORAL_GRPC_HOST:7233 node server.js"]
+ENTRYPOINT ["/bin/sh", "-c", "TEMPORAL_ADDRESS=$TEMPORAL_GRPC_HOST:7233 TEMPORAL_UI_PORT=${PORT:-8080} ./start-ui-server.sh"]
