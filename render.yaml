@@ -346,7 +346,7 @@ services:
   - type: web
     name: temporal-ui
     autoDeploy: false
-    plan: Standard
+    plan: Starter
     region: frankfurt
     env: docker
     dockerfilePath: ./temporal-cluster/web/Dockerfile
