@@ -350,6 +350,7 @@ services:
     region: frankfurt
     env: docker
     dockerfilePath: ./temporal-cluster/web/Dockerfile
+    healthCheckPath: /ping
     envVars:
       - key: PORT
         value: 8080
@@ -358,6 +359,27 @@ services:
           name: temporal-frontend
           type: pserv
           property: host
+      # Google sign-in in front of the UI (oauth2-proxy). Never add OAUTH2_PROXY_REVERSE_PROXY or
+      # skip-auth routes: together they're an auth bypass (CVE-2026-40575, CVE-2026-76835).
+      - key: OAUTH2_PROXY_PROVIDER
+        value: google
+      # Render ignores sync: false keys when syncing an existing Blueprint, so set these in the Dashboard.
+      - key: OAUTH2_PROXY_CLIENT_ID
+        sync: false
+      - key: OAUTH2_PROXY_CLIENT_SECRET
+        sync: false
+      - key: OAUTH2_PROXY_COOKIE_SECRET
+        sync: false
+      - key: OAUTH2_PROXY_EMAIL_DOMAINS
+        sync: false
+      - key: OAUTH2_PROXY_COOKIE_EXPIRE
+        value: 8760h
+      - key: OAUTH2_PROXY_SKIP_PROVIDER_BUTTON
+        value: true
+      - key: OAUTH2_PROXY_PROMPT
+        value: select_account
+      - key: OAUTH2_PROXY_SILENCE_PING_LOGGING
+        value: true
 
 # For secure external access to the Temporal Workflow Service via REST
 # See https://github.com/render-examples/temporal-rest-proxy
